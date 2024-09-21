@@ -1,3 +1,6 @@
+import argparse
+from typing import Optional
+
 import omegaup.api
 import sys
 import os
@@ -66,14 +69,13 @@ def display_admin_contests(contest_class):
     return contests.contests[contest_idx].alias
 
 
-def display_contest_problems(contest_class, contest_alias):
-    problems = contest_class.problems(contest_alias=contest_alias)
+def display_contest_problems(problems):
     columns = [[0, "all"]]
 
     for idx, problem in enumerate(problems.problems):
         columns.append([idx + 1, problem.alias])
 
-    print("\nPlease select a a problem:")
+    print("\nPlease select a problem:")
 
     print_table(columns)
 
@@ -108,7 +110,7 @@ def get_runs_from_problem(contest_class, run_class, contest_alias, problem_alias
                 "source": get_source_from_run(run_class, run.guid),
             }
         )
-    print("Done")
+    print(f"Obtained {len(runs.runs)} runs")
     return runs_by_username
 
 
@@ -225,41 +227,27 @@ def get_user_from_html_line(line, problem_alias):
     return line[search_index:user_index]
 
 
-def test():
-    html_paths = [
-        {
-            "lang": "c",
-            "html": "test_files/Sumas-Veleanas_c_filtered_report.html",
-        },
-        {
-            "lang": "cc",
-            "html": "test_files/Sumas-Veleanas_cc_filtered_report.html",
-        },
-        {
-            "lang": "py",
-            "html": "test_files/Sumas-Veleanas_python_filtered_report.html",
-        },
-        {
-            "lang": "java",
-            "html": "test_files/Sumas-Veleanas_java_filtered_report.html",
-        },
-    ]
-    generate_website(html_paths, {})
-
-
-def main():
+def main(contest_alias: Optional[str], problem_alias: Optional[str]) -> None:
     username, password, moss_user_id = get_credentials_from_file("login.txt")
 
     client_class = omegaup.api.Client(username=username, password=password)
     contest_class = omegaup.api.Contest(client=client_class)
     run_class = omegaup.api.Run(client=client_class)
 
-    contest_alias = display_admin_contests(contest_class)
-    problem_aliases = display_contest_problems(contest_class, contest_alias)
+    contest_alias = contest_alias if contest_alias else display_admin_contests(contest_class)
+    problems = contest_class.problems(contest_alias=contest_alias)
+    if problem_alias == "all":
+        problem_aliases = [problem.alias for problem in problems.problems]
+    elif problem_alias:
+        problem_aliases = [problem_alias]
+    else:
+        problem_aliases = display_contest_problems(problems)
+
     name_by_username = {
         contestant.username: contestant.name
         for contestant in contest_class.scoreboard(contest_alias=contest_alias).ranking
     }
+    print(f"Getting the code of all runs for {len(problem_aliases)} problems for contest {contest_alias}")
     for problem_alias in problem_aliases:
         runs = get_runs_from_problem(
             contest_class, run_class, contest_alias, problem_alias
@@ -274,9 +262,9 @@ def main():
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        main()
-    elif (sys.argv[1]) == "--test":
-        test()
-    else:
-        print("Usage: python3 moss.py [--test]")
+    parser = argparse.ArgumentParser(prog="moss", description="Check code plagiarism in omegaUp via Moss")
+    parser.add_argument("-c", "--contest", help="Contest alias to check")
+    parser.add_argument("-p", "--problem", help="Problem alias to check, use 'all' for all contest problems")
+    args = parser.parse_args()
+
+    main(contest_alias=args.contest, problem_alias=args.problem)

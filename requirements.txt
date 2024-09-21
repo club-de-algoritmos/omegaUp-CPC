@@ -1,4 +1,5 @@
-omegaup
-mosspy
+argparse
 beautifulsoup4
+mosspy
+omegaup
 pybars3
