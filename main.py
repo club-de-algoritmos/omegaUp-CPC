@@ -7,6 +7,7 @@ import os
 import math
 import mosspy
 from template.template import generate_website
+from terminal import with_color, BColor
 
 from util import get_credentials_from_file, print_table, path_exists
 
@@ -36,18 +37,6 @@ lang_extension_to_moss = {
     ".pascal": "pascal",
     ".txt": "ascii",
 }
-
-
-class bcolors:
-    HEADER = "\033[95m"
-    OKBLUE = "\033[94m"
-    OKCYAN = "\033[96m"
-    OKGREEN = "\033[92m"
-    WARNING = "\033[93m"
-    FAIL = "\033[91m"
-    ENDC = "\033[0m"
-    BOLD = "\033[1m"
-    UNDERLINE = "\033[4m"
 
 
 def display_admin_contests(contest_class):
@@ -94,7 +83,7 @@ def display_contest_problems(problems):
 def get_runs_from_problem(contest_class, run_class, contest_alias, problem_alias):
     runs = contest_class.runs(contest_alias=contest_alias, problem_alias=problem_alias)
 
-    print(bcolors.BOLD + "\nGetting runs from problem: " + problem_alias + bcolors.ENDC)
+    print(with_color(f"\nGetting runs from problem: {problem_alias}", BColor.BOLD))
     # separate runs by username
     runs_by_username = {}
     for run in runs.runs:
@@ -137,7 +126,7 @@ def save_source_code(runs, problem_alias):
                 if language.startswith(lang):
                     extension = ext
             if extension == ".txt":
-                print(f"{bcolors.WARNING}WARNING: extension for language {language} not found{bcolors.ENDC}")
+                print(with_color(f"WARNING: extension for language {language} not found", BColor.WARNING))
 
             file_name = (
                 f"{idx}_{username}_{problem_alias}_{run['verdict']}_{score}{extension}"
@@ -163,12 +152,10 @@ def check_plagiarism(moss_user_id, problem_aliases, name_by_username):
             url = m.send(lambda file_path, display_name: print("*", end="", flush=True))
 
             print()
-            print(bcolors.OKGREEN + "OK: " + moss_lang + bcolors.ENDC)
+            print(with_color(f"OK: {moss_lang}", BColor.OK_GREEN))
             print(
-                "Unfiltered Online Report (May contain duplicates): "
-                + bcolors.OKCYAN
-                + url
-                + bcolors.ENDC
+                "Unfiltered Online Report (May contain duplicates): " +
+                with_color(url, BColor.OK_CYAN)
             )
 
             if not path_exists("submission"):
