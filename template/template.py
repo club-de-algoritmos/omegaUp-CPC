@@ -5,13 +5,17 @@ import os
 
 
 def generate_website(html_lang_path, name_by_username):
-    all_lang_results = []
+    results_by_lang = {}
     for html_path in html_lang_path:
         lang_html = get_information_from_html(html_path["html"], name_by_username)
-        problem_alias = html_path["problem_alias"]
         lang = html_path["lang"]
-        all_lang_results.append({"lang": f"{lang} - {problem_alias}", "data": lang_html})
-    compile_website(all_lang_results)
+        results_by_lang.setdefault(lang, []).append({"lang": lang, "data": lang_html})
+    results = []
+    for lang in sorted(results_by_lang.keys()):
+        data = [r for res in results_by_lang[lang] for r in res["data"]]
+        data = sorted(data, key=lambda d: -d["status_perc"])
+        results.append({"lang": lang, "data": data})
+    compile_website(results)
 
 
 def status_as_int(status):
@@ -51,9 +55,10 @@ def get_information_from_html(html_path, name_by_username):
                         "usernames": (username_1, username_2),
                         "file_name": (file_name_1, file_name_2),
                         "status": status,
+                        "status_perc": status_as_int(status),
                     }
                 )
-    return sorted(results, key=lambda r: -status_as_int(r["status"]))
+    return results
 
 
 # results = {lang, results: {link, problem_alias, username, file_name, status}}
