@@ -1,9 +1,8 @@
 import os.path
+from typing import Tuple, List
 
-from mosspy import moss
 
-
-def get_credentials_from_file(file_name):
+def get_credentials_from_file(file_name: str) -> Tuple[str, str, str]:
     """
     Reads the login credentials from the file. If they are not there, then it will ask for them and write them to the file.
     """
@@ -25,7 +24,7 @@ def get_credentials_from_file(file_name):
     return username, password, moss_user_id
 
 
-def print_table(rows):
+def print_table(rows: List[List[str]]) -> None:
     """
     Prints a table with the given columns.
     """
@@ -38,7 +37,3 @@ def print_table(rows):
             print(str(row[i]).ljust(col_widths[i]), end=" | ")
         print("")
     print("-" * total_width)
-
-
-def path_exists(*args):
-    return os.path.exists(os.path.join(*args))
