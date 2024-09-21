@@ -4,19 +4,25 @@ from server import start_server
 import os
 
 
-def generate_website(html_lang_path):
+def generate_website(html_lang_path, name_by_username):
     all_lang_results = []
     for html_path in html_lang_path:
-        lang_html = get_information_from_html(html_path["html"])
-        all_lang_results.append({"lang": html_path["lang"], "data": lang_html})
+        lang_html = get_information_from_html(html_path["html"], name_by_username)
+        problem_alias = html_path["problem_alias"]
+        lang = html_path["lang"]
+        all_lang_results.append({"lang": f"{lang} - {problem_alias}", "data": lang_html})
     compile_website(all_lang_results)
 
 
-def get_information_from_html(html_path):
+def status_as_int(status):
+    return int(status.replace("(", "").replace(")", "").replace("%", ""))
+
+
+def get_information_from_html(html_path, name_by_username):
     results = []
     with open(html_path) as h:
-        scapper = BeautifulSoup(h, "html.parser")
-        a_tags = scapper.find_all("a")
+        scrapper = BeautifulSoup(h, "html.parser")
+        a_tags = scrapper.find_all("a")
 
         # TODO: group by two
         for idx in range(0, len(a_tags), 2):
@@ -29,13 +35,13 @@ def get_information_from_html(html_path):
                 # Process first tag
                 first_tag_information = tag.contents[0]
                 problem_alias, username_1, file_name_1, status = get_results_information(
-                    first_tag_information
+                    first_tag_information, name_by_username
                 )
 
                 # Process second tag
                 second_tag_information = tag_pair.contents[0]
                 _, username_2, file_name_2, _ = get_results_information(
-                    second_tag_information
+                    second_tag_information, name_by_username
                 )
 
                 results.append(
@@ -47,7 +53,7 @@ def get_information_from_html(html_path):
                         "status": status,
                     }
                 )
-    return results
+    return sorted(results, key=lambda r: -status_as_int(r["status"]))
 
 
 # results = {lang, results: {link, problem_alias, username, file_name, status}}
@@ -62,8 +68,11 @@ def compile_website(results):
             o.write(output)
 
 
-def get_results_information(information):
+def get_results_information(information, name_by_username):
     content = information.split("/")
     _, problem_alias, username, file_name_and_status = content
     file_name, status = file_name_and_status.split(" ")
+    name = name_by_username.get(username)
+    if name:
+        username = f"{name} ({username})"
     return problem_alias, username, file_name, status

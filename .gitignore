@@ -1,6 +1,9 @@
 # python
 __pycache__
 
+#IDE
+.idea
+
 # personal info
 login.txt
 

@@ -14,6 +14,9 @@ omegaup_lang_extension = {
     "cpp11-gcc": ".cpp",
     "cpp17-clang": ".cpp",
     "cpp17-gcc": ".cpp",
+    "cpp20-clang": ".cpp",
+    "cpp20-gcc": ".cpp",
+    "cs": ".cs",
     "java": ".java",
     "kj": ".java",
     "kp": ".pascal",
@@ -24,6 +27,7 @@ omegaup_lang_extension = {
 lang_extension_to_moss = {
     ".c": "c",
     ".cpp": "cc",
+    ".cs": "csharp#",
     ".py": "python",
     ".java": "java",
     ".pascal": "pascal",
@@ -48,26 +52,26 @@ def display_admin_contests(contest_class):
     # contests = contest_class.list(page=0, page_size=10, query="2")
 
     columns = []
-    for idx, contest in enumerate(contests["contests"]):
-        columns.append([idx, contest["alias"]])
+    for idx, contest in enumerate(contests.contests):
+        columns.append([idx, contest.alias])
 
     print("\nPlease select a a contest:")
     print_table(columns)
     contest_idx = int(input("Enter the contest number: "))
 
-    if contest_idx < 0 or contest_idx >= len(contests["contests"]):
+    if contest_idx < 0 or contest_idx >= len(contests.contests):
         print("Invalid contest number")
         sys.exit(1)
 
-    return contests["contests"][contest_idx]["alias"]
+    return contests.contests[contest_idx].alias
 
 
 def display_contest_problems(contest_class, contest_alias):
     problems = contest_class.problems(contest_alias=contest_alias)
     columns = [[0, "all"]]
 
-    for idx, problem in enumerate(problems["problems"]):
-        columns.append([idx + 1, problem["alias"]])
+    for idx, problem in enumerate(problems.problems):
+        columns.append([idx + 1, problem.alias])
 
     print("\nPlease select a a problem:")
 
@@ -75,14 +79,14 @@ def display_contest_problems(contest_class, contest_alias):
 
     problem_idx = int(input("Enter the problem number: "))
 
-    if problem_idx < 0 or problem_idx >= len(problems["problems"]) + 1:
+    if problem_idx < 0 or problem_idx >= len(problems.problems) + 1:
         print("Invalid problem number")
         sys.exit(1)
 
     if problem_idx == 0:
         # return an array of problem aliases
-        return [problem["alias"] for problem in problems["problems"]]
-    return [problems["problems"][problem_idx - 1]["alias"]]
+        return [problem.alias for problem in problems.problems]
+    return [problems.problems[problem_idx - 1].alias]
 
 
 def get_runs_from_problem(contest_class, run_class, contest_alias, problem_alias):
@@ -91,17 +95,17 @@ def get_runs_from_problem(contest_class, run_class, contest_alias, problem_alias
     print(bcolors.BOLD + "\nGetting runs from problem: " + problem_alias + bcolors.ENDC)
     # separate runs by username
     runs_by_username = {}
-    for run in runs["runs"]:
-        if run["username"] not in runs_by_username:
-            runs_by_username[run["username"]] = []
-        runs_by_username[run["username"]].append(
+    for run in runs.runs:
+        if run.username not in runs_by_username:
+            runs_by_username[run.username] = []
+        runs_by_username[run.username].append(
             {
-                "run_alias": run["guid"],
-                "problem_alias": run["alias"],
-                "language": run["language"],
-                "score": run["score"],
-                "verdict": run["verdict"],
-                "source": get_source_from_run(run_class, run["guid"]),
+                "run_alias": run.guid,
+                "problem_alias": run.alias,
+                "language": run.language,
+                "score": run.score,
+                "verdict": run.verdict,
+                "source": get_source_from_run(run_class, run.guid),
             }
         )
     print("Done")
@@ -110,7 +114,7 @@ def get_runs_from_problem(contest_class, run_class, contest_alias, problem_alias
 
 def get_source_from_run(run_class, run_alias):
     source = run_class.source(run_alias=run_alias)
-    return source["source"]
+    return source.source
 
 
 def save_source_code(runs, problem_alias):
@@ -130,6 +134,8 @@ def save_source_code(runs, problem_alias):
             for lang, ext in omegaup_lang_extension.items():
                 if language.startswith(lang):
                     extension = ext
+            if extension == ".txt":
+                print(f"{bcolors.WARNING}WARNING: extension for language {language} not found{bcolors.ENDC}")
 
             file_name = (
                 f"{idx}_{username}_{problem_alias}_{run['verdict']}_{score}{extension}"
@@ -140,50 +146,51 @@ def save_source_code(runs, problem_alias):
     print("Problems saved! Please check the generated folder")
 
 
-def check_plagiarism(moss_user_id, problem_alias):
-
+def check_plagiarism(moss_user_id, problem_aliases, name_by_username):
     print("Sending information to Moss. Please be patient...")
 
     html_paths = []
-    for ext, moss_lang in lang_extension_to_moss.items():
-        m = mosspy.Moss(moss_user_id, moss_lang)
-        m.addFilesByWildcard(os.path.join("generated", problem_alias, "*", f"*{ext}"))
+    for problem_alias in problem_aliases:
+        for ext, moss_lang in lang_extension_to_moss.items():
+            m = mosspy.Moss(moss_user_id, moss_lang)
+            m.addFilesByWildcard(os.path.join("generated", problem_alias, "*", f"*{ext}"))
 
-        if len(m.files) == 0:
-            continue
+            if len(m.files) == 0:
+                continue
 
-        url = m.send(lambda file_path, display_name: print("*", end="", flush=True))
+            url = m.send(lambda file_path, display_name: print("*", end="", flush=True))
 
-        print()
-        print(bcolors.OKGREEN + "OK: " + moss_lang + bcolors.ENDC)
-        print(
-            "Unfiltered Online Report (May contain duplicates): "
-            + bcolors.OKCYAN
-            + url
-            + bcolors.ENDC
-        )
+            print()
+            print(bcolors.OKGREEN + "OK: " + moss_lang + bcolors.ENDC)
+            print(
+                "Unfiltered Online Report (May contain duplicates): "
+                + bcolors.OKCYAN
+                + url
+                + bcolors.ENDC
+            )
 
-        if not path_exists("submission"):
-            os.mkdir("submission")
+            if not path_exists("submission"):
+                os.mkdir("submission")
 
-        # Save report file
-        report_path = os.path.join(
-            "submission", f"{problem_alias}_{moss_lang}_unfiltered_report.html"
-        )
-        filtered_report_path = os.path.join(
-            "submission", f"{problem_alias}_{moss_lang}_filtered_report.html"
-        )
-        print("The unfiltered report has been saved locally inside: ", report_path)
-        m.saveWebPage(url, report_path)
+            # Save report file
+            report_path = os.path.join(
+                "submission", f"{problem_alias}_{moss_lang}_unfiltered_report.html"
+            )
+            filtered_report_path = os.path.join(
+                "submission", f"{problem_alias}_{moss_lang}_filtered_report.html"
+            )
+            print("The unfiltered report has been saved locally inside: ", report_path)
+            m.saveWebPage(url, report_path)
 
-        remove_same_user_matches(report_path, filtered_report_path, problem_alias)
-        html_paths.append(
-            {
-                "lang": moss_lang,
-                "html": filtered_report_path,
-            },
-        )
-    generate_website(html_paths)
+            remove_same_user_matches(report_path, filtered_report_path, problem_alias)
+            html_paths.append(
+                {
+                    "problem_alias": problem_alias,
+                    "lang": moss_lang,
+                    "html": filtered_report_path,
+                },
+            )
+    generate_website(html_paths, name_by_username)
 
 
 def remove_same_user_matches(report_path, filtered_report_path, problem_alias):
@@ -237,11 +244,10 @@ def test():
             "html": "test_files/Sumas-Veleanas_java_filtered_report.html",
         },
     ]
-    generate_website(html_paths)
+    generate_website(html_paths, {})
 
 
 def main():
-
     username, password, moss_user_id = get_credentials_from_file("login.txt")
 
     client_class = omegaup.api.Client(username=username, password=password)
@@ -250,6 +256,10 @@ def main():
 
     contest_alias = display_admin_contests(contest_class)
     problem_aliases = display_contest_problems(contest_class, contest_alias)
+    name_by_username = {
+        contestant.username: contestant.name
+        for contestant in contest_class.scoreboard(contest_alias=contest_alias).ranking
+    }
     for problem_alias in problem_aliases:
         runs = get_runs_from_problem(
             contest_class, run_class, contest_alias, problem_alias
@@ -259,14 +269,14 @@ def main():
         if not path_exists("generated", problem_alias):
             os.mkdir(os.path.join("generated", problem_alias))
         save_source_code(runs, problem_alias)
-        check_plagiarism(moss_user_id, problem_alias)
+
+    check_plagiarism(moss_user_id, problem_aliases, name_by_username)
 
 
 if __name__ == "__main__":
-
     if len(sys.argv) < 2:
         main()
-    if (sys.argv[1]) == "--test":
+    elif (sys.argv[1]) == "--test":
         test()
     else:
         print("Usage: python3 moss.py [--test]")
