@@ -1,5 +1,6 @@
 import argparse
-from typing import Optional, List, Dict, Union
+from datetime import timedelta
+from typing import Optional, List, Dict, Union, Tuple, Set
 
 import omegaup.api
 import sys
@@ -80,18 +81,12 @@ def _choose_problems_interactively(problems: omegaup.api.ContestProblemsResponse
 
 
 def _download_runs_for_problem(
-        contest_class: omegaup.api.Contest,
         run_class: omegaup.api.Run,
-        contest_alias: str,
+        runs_by_username: Dict[str, List[omegaup.api._Run]],
         problem_alias: str,
-) -> None:
-    print(with_color(f"\nGetting the runs for problem {problem_alias}", BColor.BOLD))
-    runs = contest_class.runs(contest_alias=contest_alias, problem_alias=problem_alias).runs
-    runs_by_username = {}
-    for run in runs:
-        runs_by_username.setdefault(run.username, []).append(run)
-
-    print(f"Got {len(runs)} runs, saving their source code locally...")
+) -> Dict[str, str]:
+    print(f"Saving their source code locally...")
+    source_by_run_id = {}
     for username, user_runs in runs_by_username.items():
         path = os.path.join("generated", problem_alias, username)
         os.makedirs(path, exist_ok=True)
@@ -111,14 +106,18 @@ def _download_runs_for_problem(
             )
             file_path = os.path.join(path, file_name)
             if os.path.exists(file_path):
-                # Avoid re-downloading
+                # Avoid re-downloading, but read the file so it can be set
+                with open(file_path) as f:
+                    source_by_run_id[run.guid] = "\n".join(f.readlines())
                 continue
 
             source = _get_source_from_run(run_class, run.guid)
+            source_by_run_id[run.guid] = source
             with open(file_path, "w") as f:
                 f.write(source)
 
     print("Source code saved!")
+    return source_by_run_id
 
 
 def _get_source_from_run(run_class, run_alias: str) -> str:
@@ -195,6 +194,99 @@ def _get_user_from_html_line(line: str, problem_alias: str) -> str:
     return line[search_index:user_index]
 
 
+def _count_comments(source: List[str], language: str) -> Tuple[int, Set[str]]:
+    comment_starts = ["#"] if language.startswith("py") else ["//", "/*"]
+    count = 0
+    matching_lines = set()
+    for line in source:
+        for comment_start in comment_starts:
+            if comment_start in line:
+                count += 1
+                matching_lines.add(line)
+                break
+    return count, matching_lines
+
+
+def _count_accents(source: List[str]) -> Tuple[int, Set[str]]:
+    count = 0
+    matching_lines = set()
+    for line in source:
+        for char in line.lower():
+            if char in "áéíóú":
+                count += 1
+                matching_lines.add(line)
+    return count, matching_lines
+
+
+def _count_exceptions(source: List[str]) -> Tuple[int, Set[str]]:
+    count = 0
+    matching_lines = set()
+    for line in source:
+        if "Exception" in line or "Error" in line:
+            count += 1
+            matching_lines.add(line)
+            break
+    return count, matching_lines
+
+
+def _check_suspicious_activity(
+        runs_by_username: Dict[str, List[omegaup.api._Run]],
+        source_by_run_id: Dict[str, str],
+        problem_alias: str,
+        name_by_username: Dict[str, str],
+) -> None:
+    for username, runs in runs_by_username.items():
+        languages = set()
+        previous_run = None
+        warnings = []
+        suspicious_lines = set()
+        for run in runs:
+            source = source_by_run_id[run.guid]
+            source_lines = source.split("\n")
+            extension = omegaup_lang_extension[run.language]
+            languages.add(extension)
+            if previous_run:
+                previous_extension = omegaup_lang_extension[previous_run.language]
+                if extension != previous_extension:
+                    time_diff = run.time - previous_run.time
+                    if time_diff < timedelta(minutes=15):
+                        warnings.append(f"Used different languages within {math.ceil(time_diff.total_seconds() / 60)} minutes")
+
+            comment_count, comment_lines = _count_comments(source_lines, run.language)
+            suspicious_lines.update(comment_lines)
+            if comment_count > 3:
+                warnings.append(f"Code has {comment_count} comments")
+
+            accent_count, accent_lines = _count_accents(source_lines)
+            suspicious_lines.update(accent_lines)
+            if accent_count > 0:
+                warnings.append(f"Code has {accent_count} accents")
+
+            exception_count, exception_lines = _count_exceptions(source_lines)
+            suspicious_lines.update(exception_lines)
+            if exception_count > 1:
+                warnings.append(f"Code has {exception_count} exceptions")
+
+            previous_run = run
+
+        if len(languages) > 1:
+            warnings.append(f"Used more than language: {languages}")
+
+        suspicious_lines = {line.strip() for line in suspicious_lines}
+        if warnings:
+            if username in name_by_username:
+                name = f"{name_by_username[username]} ({username})"
+            else:
+                name = username
+            print(with_color(f"Suspicious code from {name} for problem {problem_alias}:", BColor.WARNING))
+            for warning in warnings:
+                print(f"  - {warning}")
+            print("  - Suspicious code:")
+            for suspicious_line in sorted(suspicious_lines):
+                print(f"    - {suspicious_line}")
+            print()
+
+
 def _main(contest_alias: Optional[str], problem_alias: Optional[str], check_plagiarism: bool) -> None:
     username, password, moss_user_id = get_credentials_from_file("login.txt")
 
@@ -218,9 +310,15 @@ def _main(contest_alias: Optional[str], problem_alias: Optional[str], check_plag
 
     print(f"Getting the code of all runs for {len(problem_aliases)} problems for contest {contest_alias}")
     for problem_alias in problem_aliases:
-        _download_runs_for_problem(
-            contest_class, run_class, contest_alias, problem_alias
-        )
+        print(with_color(f"\nGetting the runs for problem {problem_alias}", BColor.BOLD))
+        # TODO: Get runs directly for problem to be able to compare against previous solutions (make it a flag?)
+        runs = contest_class.runs(contest_alias=contest_alias, problem_alias=problem_alias).runs
+        runs_by_username = {}
+        for run in runs:
+            runs_by_username.setdefault(run.username, []).append(run)
+
+        source_by_run_id = _download_runs_for_problem(run_class, runs_by_username, problem_alias)
+        _check_suspicious_activity(runs_by_username, source_by_run_id, problem_alias, name_by_username)
 
     if check_plagiarism:
         _check_plagiarism(moss_user_id, problem_aliases, name_by_username)
