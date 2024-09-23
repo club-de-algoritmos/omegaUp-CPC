@@ -79,64 +79,51 @@ def _choose_problems_interactively(problems: omegaup.api.ContestProblemsResponse
     return [problems.problems[problem_idx - 1].alias]
 
 
-def _get_runs_by_username_for_problem(
+def _download_runs_for_problem(
         contest_class: omegaup.api.Contest,
         run_class: omegaup.api.Run,
         contest_alias: str,
         problem_alias: str,
-) -> Dict[str, List[Dict[str, Union[float, str]]]]:
-    runs = contest_class.runs(contest_alias=contest_alias, problem_alias=problem_alias)
-
-    print(with_color(f"\nGetting runs from problem: {problem_alias}", BColor.BOLD))
+) -> None:
+    print(with_color(f"\nGetting the runs for problem {problem_alias}", BColor.BOLD))
+    runs = contest_class.runs(contest_alias=contest_alias, problem_alias=problem_alias).runs
     runs_by_username = {}
-    for run in runs.runs:
-        if run.username not in runs_by_username:
-            runs_by_username[run.username] = []
-        runs_by_username[run.username].append(
-            {
-                "run_alias": run.guid,
-                "problem_alias": run.alias,
-                "language": run.language,
-                "score": run.score,
-                "verdict": run.verdict,
-                "source": _get_source_from_run(run_class, run.guid),
-            }
-        )
-    print(f"Obtained {len(runs.runs)} runs")
-    return runs_by_username
+    for run in runs:
+        runs_by_username.setdefault(run.username, []).append(run)
+
+    print(f"Got {len(runs)} runs, saving their source code locally...")
+    for username, user_runs in runs_by_username.items():
+        path = os.path.join("generated", problem_alias, username)
+        os.makedirs(path, exist_ok=True)
+        for idx, run in enumerate(user_runs):
+            language = run.language
+            extension = None
+            for lang, ext in omegaup_lang_extension.items():
+                if language.startswith(lang):
+                    extension = ext
+            if not extension:
+                print(with_color(f"Extension for language {language} not found", BColor.WARNING))
+                extension = ".txt"
+
+            score = math.floor(run.score * 100)
+            file_name = (
+                f"{idx:02}_{username}_{problem_alias}_{run.verdict}_{score}{extension}"
+            )
+            file_path = os.path.join(path, file_name)
+            if os.path.exists(file_path):
+                # Avoid re-downloading
+                continue
+
+            source = _get_source_from_run(run_class, run.guid)
+            with open(file_path, "w") as f:
+                f.write(source)
+
+    print("Source code saved!")
 
 
 def _get_source_from_run(run_class, run_alias: str) -> str:
     source = run_class.source(run_alias=run_alias)
     return source.source
-
-
-def _save_source_code(runs_by_username: Dict[str, List[Dict[str, Union[float, str]]]], problem_alias: str) -> None:
-    print("\nSaving source code locally...")
-
-    for username, runs in runs_by_username.items():
-        path = os.path.join("generated", problem_alias, username)
-        os.makedirs(path, exist_ok=True)
-
-        runs.reverse()  # reverse to get the latest run first
-        for idx, run in enumerate(runs):
-            language = run["language"]
-            score = math.floor(run["score"] * 100)
-            extension = ".txt"
-
-            for lang, ext in omegaup_lang_extension.items():
-                if language.startswith(lang):
-                    extension = ext
-            if extension == ".txt":
-                print(with_color(f"WARNING: extension for language {language} not found", BColor.WARNING))
-
-            file_name = (
-                f"{idx}_{username}_{problem_alias}_{run['verdict']}_{score}{extension}"
-            )
-            with open(os.path.join(path, file_name), "w") as f:
-                f.write(run["source"])
-
-    print("Problems saved! Please check the generated folder")
 
 
 def _check_plagiarism(moss_user_id: str, problem_aliases: List[str], name_by_username: Dict[str, str]) -> None:
@@ -208,7 +195,7 @@ def _get_user_from_html_line(line: str, problem_alias: str) -> str:
     return line[search_index:user_index]
 
 
-def _main(contest_alias: Optional[str], problem_alias: Optional[str]) -> None:
+def _main(contest_alias: Optional[str], problem_alias: Optional[str], check_plagiarism: bool) -> None:
     username, password, moss_user_id = get_credentials_from_file("login.txt")
 
     client_class = omegaup.api.Client(username=username, password=password)
@@ -231,18 +218,21 @@ def _main(contest_alias: Optional[str], problem_alias: Optional[str]) -> None:
 
     print(f"Getting the code of all runs for {len(problem_aliases)} problems for contest {contest_alias}")
     for problem_alias in problem_aliases:
-        runs_by_username = _get_runs_by_username_for_problem(
+        _download_runs_for_problem(
             contest_class, run_class, contest_alias, problem_alias
         )
-        _save_source_code(runs_by_username, problem_alias)
 
-    _check_plagiarism(moss_user_id, problem_aliases, name_by_username)
+    if check_plagiarism:
+        _check_plagiarism(moss_user_id, problem_aliases, name_by_username)
+    else:
+        print("The plagiarism check has been skipped")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog="moss", description="Check code plagiarism in omegaUp via Moss")
     parser.add_argument("-c", "--contest", help="Contest alias to check")
     parser.add_argument("-p", "--problem", help="Problem alias to check, use 'all' for all contest problems")
+    parser.add_argument("--skip-plagiarism", action="store_true", help="Skip doing the plagiarism check with Moss")
     args = parser.parse_args()
 
-    _main(contest_alias=args.contest, problem_alias=args.problem)
+    _main(contest_alias=args.contest, problem_alias=args.problem, check_plagiarism=not args.skip_plagiarism)
