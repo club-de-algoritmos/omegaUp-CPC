@@ -234,7 +234,8 @@ def _check_suspicious_activity(
         source_by_run_id: Dict[str, str],
         problem_alias: str,
         name_by_username: Dict[str, str],
-) -> None:
+) -> Set[str]:
+    suspicious_names = set()
     for username, runs in runs_by_username.items():
         languages = set()
         previous_run = None
@@ -275,8 +276,11 @@ def _check_suspicious_activity(
         suspicious_lines = {line.strip() for line in suspicious_lines}
         if warnings:
             if username in name_by_username:
-                name = f"{name_by_username[username]} ({username})"
+                name = name_by_username[username]
+                suspicious_names.add(name)
+                name = f"{name} ({username})"
             else:
+                suspicious_names.add(username)
                 name = username
             print(with_color(f"Suspicious code from {name} for problem {problem_alias}:", BColor.WARNING))
             for warning in warnings:
@@ -285,6 +289,8 @@ def _check_suspicious_activity(
             for suspicious_line in sorted(suspicious_lines):
                 print(f"    - {suspicious_line}")
             print()
+
+    return suspicious_names
 
 
 def _main(contest_alias: Optional[str], problem_alias: Optional[str], check_plagiarism: bool) -> None:
@@ -309,6 +315,7 @@ def _main(contest_alias: Optional[str], problem_alias: Optional[str], check_plag
     }
 
     print(f"Getting the code of all runs for {len(problem_aliases)} problems for contest {contest_alias}")
+    suspicious_counts = {}
     for problem_alias in problem_aliases:
         print(with_color(f"\nGetting the runs for problem {problem_alias}", BColor.BOLD))
         # TODO: Get runs directly for problem to be able to compare against previous solutions (make it a flag?)
@@ -318,7 +325,26 @@ def _main(contest_alias: Optional[str], problem_alias: Optional[str], check_plag
             runs_by_username.setdefault(run.username, []).append(run)
 
         source_by_run_id = _download_runs_for_problem(run_class, runs_by_username, problem_alias)
-        _check_suspicious_activity(runs_by_username, source_by_run_id, problem_alias, name_by_username)
+        suspicious_names = _check_suspicious_activity(runs_by_username, source_by_run_id, problem_alias, name_by_username)
+        for name in suspicious_names:
+            suspicious_counts.setdefault(name, 0)
+            suspicious_counts[name] += 1
+
+    suspicious_school_counts = {}
+    for name in suspicious_counts.keys():
+        if "-" in name:
+            school = name.split("-")[-1]
+            suspicious_school_counts.setdefault(school, 0)
+            suspicious_school_counts[school] += 1
+
+    suspicious_schools = sorted(
+        ((school, count) for school, count in suspicious_school_counts.items() if count > 1),
+        key=lambda e: (-e[1], e[0]),
+    )
+    if suspicious_schools:
+        print(with_color("Suspicious schools:", BColor.WARNING))
+        for school, count in suspicious_schools:
+            print(f"  - {school}: {count}")
 
     if check_plagiarism:
         _check_plagiarism(moss_user_id, problem_aliases, name_by_username)
