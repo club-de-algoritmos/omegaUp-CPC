@@ -79,7 +79,7 @@ def _choose_problems_interactively(problems: omegaup.api.ContestProblemsResponse
     return [problems.problems[problem_idx - 1].alias]
 
 
-def _get_runs_for_problem(
+def _get_runs_by_username_for_problem(
         contest_class: omegaup.api.Contest,
         run_class: omegaup.api.Run,
         contest_alias: str,
@@ -88,7 +88,6 @@ def _get_runs_for_problem(
     runs = contest_class.runs(contest_alias=contest_alias, problem_alias=problem_alias)
 
     print(with_color(f"\nGetting runs from problem: {problem_alias}", BColor.BOLD))
-    # separate runs by username
     runs_by_username = {}
     for run in runs.runs:
         if run.username not in runs_by_username:
@@ -112,16 +111,15 @@ def _get_source_from_run(run_class, run_alias: str) -> str:
     return source.source
 
 
-def _save_source_code(runs, problem_alias: str) -> None:
+def _save_source_code(runs_by_username: Dict[str, List[Dict[str, Union[float, str]]]], problem_alias: str) -> None:
     print("\nSaving source code locally...")
 
-    for username, runs_by_username in runs.items():
+    for username, runs in runs_by_username.items():
         path = os.path.join("generated", problem_alias, username)
-        if not os.path.exists(path):
-            os.mkdir(path)
+        os.makedirs(path, exist_ok=True)
 
-        runs_by_username.reverse()  # reverse to get the latest run first
-        for idx, run in enumerate(runs_by_username):
+        runs.reverse()  # reverse to get the latest run first
+        for idx, run in enumerate(runs):
             language = run["language"]
             score = math.floor(run["score"] * 100)
             extension = ".txt"
@@ -141,15 +139,15 @@ def _save_source_code(runs, problem_alias: str) -> None:
     print("Problems saved! Please check the generated folder")
 
 
-def _check_plagiarism(moss_user_id, problem_aliases, name_by_username):
+def _check_plagiarism(moss_user_id: str, problem_aliases: List[str], name_by_username: Dict[str, str]) -> None:
     print("Sending information to Moss. Please be patient...")
 
+    os.makedirs("submission", exist_ok=True)
     html_paths = []
     for problem_alias in problem_aliases:
         for ext, moss_lang in lang_extension_to_moss.items():
             m = mosspy.Moss(moss_user_id, moss_lang)
             m.addFilesByWildcard(os.path.join("generated", problem_alias, "*", f"*{ext}"))
-
             if len(m.files) == 0:
                 continue
 
@@ -157,13 +155,7 @@ def _check_plagiarism(moss_user_id, problem_aliases, name_by_username):
 
             print()
             print(with_color(f"OK: {moss_lang}", BColor.OK_GREEN))
-            print(
-                "Unfiltered Online Report (May contain duplicates): " +
-                with_color(url, BColor.OK_CYAN)
-            )
-
-            if not os.path.exists("submission"):
-                os.mkdir("submission")
+            print(f"Unfiltered Online Report (May contain duplicates): {with_color(url, BColor.OK_CYAN)}")
 
             # Save report file
             report_path = os.path.join(
@@ -206,9 +198,7 @@ def _remove_same_user_matches(report_path: str, filtered_report_path: str, probl
             else:
                 f.write(line)
             idx += 1
-    print(
-        "--- The filtered report has been saved locally inside: ", filtered_report_path
-    )
+    print(f"--- The filtered report has been saved locally inside: {filtered_report_path}")
 
 
 def _get_user_from_html_line(line: str, problem_alias: str) -> str:
@@ -238,16 +228,13 @@ def _main(contest_alias: Optional[str], problem_alias: Optional[str]) -> None:
         contestant.username: contestant.name
         for contestant in contest_class.scoreboard(contest_alias=contest_alias).ranking
     }
+
     print(f"Getting the code of all runs for {len(problem_aliases)} problems for contest {contest_alias}")
     for problem_alias in problem_aliases:
-        runs = _get_runs_for_problem(
+        runs_by_username = _get_runs_by_username_for_problem(
             contest_class, run_class, contest_alias, problem_alias
         )
-        if not os.path.exists("generated"):
-            os.mkdir("generated")
-        if not os.path.exists(os.path.exists(os.path.join("generated", problem_alias))):
-            os.mkdir(os.path.join("generated", problem_alias))
-        _save_source_code(runs, problem_alias)
+        _save_source_code(runs_by_username, problem_alias)
 
     _check_plagiarism(moss_user_id, problem_aliases, name_by_username)
 
