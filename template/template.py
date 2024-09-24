@@ -1,28 +1,38 @@
+from typing import List, Dict, Tuple, Any
+
 from pybars import Compiler
 from bs4 import BeautifulSoup
 from server import start_server
 import os
 
 
-def generate_website(html_lang_path, name_by_username):
+def generate_website(
+        html_lang_paths: List[Dict[str, str]],
+        name_by_username: Dict[str, str],
+        min_plagiarism_perc: int,
+) -> None:
     results_by_lang = {}
-    for html_path in html_lang_path:
-        lang_html = get_information_from_html(html_path["html"], name_by_username)
+    for html_path in html_lang_paths:
+        lang_html = _get_information_from_html(html_path["html"], name_by_username)
         lang = html_path["lang"]
         results_by_lang.setdefault(lang, []).append({"lang": lang, "data": lang_html})
     results = []
     for lang in sorted(results_by_lang.keys()):
-        data = [r for res in results_by_lang[lang] for r in res["data"]]
+        data = [
+            r for res in results_by_lang[lang]
+            for r in res["data"]
+            if r["status_perc"] >= min_plagiarism_perc
+        ]
         data = sorted(data, key=lambda d: -d["status_perc"])
         results.append({"lang": lang, "data": data})
-    compile_website(results)
+    _compile_website(results)
 
 
-def status_as_int(status):
+def _get_status_as_int(status: str) -> int:
     return int(status.replace("(", "").replace(")", "").replace("%", ""))
 
 
-def get_information_from_html(html_path, name_by_username):
+def _get_information_from_html(html_path: str, name_by_username: Dict[str, str]) -> List[Dict[str, str]]:
     results = []
     with open(html_path) as h:
         scrapper = BeautifulSoup(h, "html.parser")
@@ -38,13 +48,13 @@ def get_information_from_html(html_path, name_by_username):
 
                 # Process first tag
                 first_tag_information = tag.contents[0]
-                problem_alias, username_1, file_name_1, status = get_results_information(
+                problem_alias, username_1, file_name_1, status = _get_results_information(
                     first_tag_information, name_by_username
                 )
 
                 # Process second tag
                 second_tag_information = tag_pair.contents[0]
-                _, username_2, file_name_2, _ = get_results_information(
+                _, username_2, file_name_2, _ = _get_results_information(
                     second_tag_information, name_by_username
                 )
 
@@ -55,14 +65,14 @@ def get_information_from_html(html_path, name_by_username):
                         "usernames": (username_1, username_2),
                         "file_name": (file_name_1, file_name_2),
                         "status": status,
-                        "status_perc": status_as_int(status),
+                        "status_perc": _get_status_as_int(status),
                     }
                 )
     return results
 
 
 # results = {lang, results: {link, problem_alias, username, file_name, status}}
-def compile_website(results):
+def _compile_website(results: List[Dict[str, Any]]) -> None:
     html_compiler = Compiler()
     with open(os.path.join("template", "template.hbs"), "r") as t:
         template = html_compiler.compile("".join(t.readlines()))
@@ -73,7 +83,7 @@ def compile_website(results):
             o.write(output)
 
 
-def get_results_information(information, name_by_username):
+def _get_results_information(information: str, name_by_username: Dict[str, str]) -> Tuple[str, str, str, str]:
     content = information.split("/")
     _, problem_alias, username, file_name_and_status = content
     file_name, status = file_name_and_status.split(" ")

@@ -125,7 +125,12 @@ def _get_source_from_run(run_class, run_alias: str) -> str:
     return source.source
 
 
-def _check_plagiarism(moss_user_id: str, problem_aliases: List[str], name_by_username: Dict[str, str]) -> None:
+def _check_plagiarism(
+        moss_user_id: str,
+        problem_aliases: List[str],
+        name_by_username: Dict[str, str],
+        min_plagiarism_perc: int,
+) -> None:
     print("Sending information to Moss. Please be patient...")
 
     os.makedirs("submission", exist_ok=True)
@@ -161,7 +166,7 @@ def _check_plagiarism(moss_user_id: str, problem_aliases: List[str], name_by_use
                     "html": filtered_report_path,
                 },
             )
-    generate_website(html_paths, name_by_username)
+    generate_website(html_paths, name_by_username, min_plagiarism_perc)
 
 
 def _remove_same_user_matches(report_path: str, filtered_report_path: str, problem_alias: str) -> None:
@@ -293,7 +298,12 @@ def _check_suspicious_activity(
     return suspicious_names
 
 
-def _main(contest_alias: Optional[str], problem_alias: Optional[str], check_plagiarism: bool) -> None:
+def _main(
+        contest_alias: Optional[str],
+        problem_alias: Optional[str],
+        check_plagiarism: bool,
+        min_plagiarism_perc: int,
+) -> None:
     username, password, moss_user_id = get_credentials_from_file("login.txt")
 
     client_class = omegaup.api.Client(username=username, password=password)
@@ -347,7 +357,7 @@ def _main(contest_alias: Optional[str], problem_alias: Optional[str], check_plag
             print(f"  - {school}: {count} suspicious teams")
 
     if check_plagiarism:
-        _check_plagiarism(moss_user_id, problem_aliases, name_by_username)
+        _check_plagiarism(moss_user_id, problem_aliases, name_by_username, min_plagiarism_perc)
     else:
         print("The plagiarism check has been skipped")
 
@@ -357,6 +367,12 @@ if __name__ == "__main__":
     parser.add_argument("-c", "--contest", help="Contest alias to check")
     parser.add_argument("-p", "--problem", help="Problem alias to check, use 'all' for all contest problems")
     parser.add_argument("--skip-plagiarism", action="store_true", help="Skip doing the plagiarism check with Moss")
+    parser.add_argument("--min-plagiarism-perc", default=30, help="Minimum percentage of similarity to detect plagiarism, defaults to 30%")
     args = parser.parse_args()
 
-    _main(contest_alias=args.contest, problem_alias=args.problem, check_plagiarism=not args.skip_plagiarism)
+    _main(
+        contest_alias=args.contest,
+        problem_alias=args.problem,
+        check_plagiarism=not args.skip_plagiarism,
+        min_plagiarism_perc=args.min_plagiarism_perc,
+    )
