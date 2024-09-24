@@ -344,7 +344,7 @@ def _main(contest_alias: Optional[str], problem_alias: Optional[str], check_plag
     if suspicious_schools:
         print(with_color("Suspicious schools:", BColor.WARNING))
         for school, count in suspicious_schools:
-            print(f"  - {school}: {count}")
+            print(f"  - {school}: {count} suspicious teams")
 
     if check_plagiarism:
         _check_plagiarism(moss_user_id, problem_aliases, name_by_username)
