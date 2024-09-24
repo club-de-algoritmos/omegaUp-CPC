@@ -1,16 +1,19 @@
 import argparse
+import csv
 from datetime import timedelta
-from typing import Optional, List, Dict, Union, Tuple, Set
+from typing import Optional, List, Dict, Tuple, Set
 
 import omegaup.api
 import sys
 import os
 import math
-import mosspy
+
+from plagiarism import check_plagiarism
 from template.template import generate_website
 from terminal import with_color, BColor
+from cpc_types import SuspiciousActivity
 
-from util import get_credentials_from_file, print_table
+from util import get_credentials_from_file, print_table, get_school_name
 
 omegaup_lang_extension = {
     "c11-clang": ".c",
@@ -27,16 +30,6 @@ omegaup_lang_extension = {
     "kp": ".pascal",
     "py2": ".py",
     "py3": ".py",
-}
-
-lang_extension_to_moss = {
-    ".c": "c",
-    ".cpp": "cc",
-    ".cs": "csharp#",
-    ".py": "python",
-    ".java": "java",
-    ".pascal": "pascal",
-    ".txt": "ascii",
 }
 
 
@@ -125,80 +118,6 @@ def _get_source_from_run(run_class, run_alias: str) -> str:
     return source.source
 
 
-def _check_plagiarism(
-        moss_user_id: str,
-        problem_aliases: List[str],
-        name_by_username: Dict[str, str],
-        min_plagiarism_perc: int,
-) -> None:
-    print("Sending information to Moss. Please be patient...")
-
-    os.makedirs("submission", exist_ok=True)
-    html_paths = []
-    for problem_alias in problem_aliases:
-        for ext, moss_lang in lang_extension_to_moss.items():
-            m = mosspy.Moss(moss_user_id, moss_lang)
-            m.addFilesByWildcard(os.path.join("generated", problem_alias, "*", f"*{ext}"))
-            if len(m.files) == 0:
-                continue
-
-            url = m.send(lambda file_path, display_name: print("*", end="", flush=True))
-
-            print()
-            print(with_color(f"OK: {moss_lang}", BColor.OK_GREEN))
-            print(f"Unfiltered Online Report (May contain duplicates): {with_color(url, BColor.OK_CYAN)}")
-
-            # Save report file
-            report_path = os.path.join(
-                "submission", f"{problem_alias}_{moss_lang}_unfiltered_report.html"
-            )
-            filtered_report_path = os.path.join(
-                "submission", f"{problem_alias}_{moss_lang}_filtered_report.html"
-            )
-            print("The unfiltered report has been saved locally inside: ", report_path)
-            m.saveWebPage(url, report_path)
-
-            _remove_same_user_matches(report_path, filtered_report_path, problem_alias)
-            html_paths.append(
-                {
-                    "problem_alias": problem_alias,
-                    "lang": moss_lang,
-                    "html": filtered_report_path,
-                },
-            )
-    generate_website(html_paths, name_by_username, min_plagiarism_perc)
-
-
-def _remove_same_user_matches(report_path: str, filtered_report_path: str, problem_alias: str) -> None:
-    with open(report_path, "r") as f:
-        lines = f.readlines()
-
-    with open(filtered_report_path, "w") as f:
-        idx = 0
-        while idx < len(lines) - 2:
-            line = lines[idx]
-            next_line = lines[idx + 1]
-            if line.startswith("<TR><TD>"):
-                first_line_user = _get_user_from_html_line(line, problem_alias)
-                second_line_user = _get_user_from_html_line(next_line, problem_alias)
-                if first_line_user != second_line_user:
-                    f.write(line)
-                    f.write(next_line)
-                    f.write(lines[idx + 2])  # align table line
-                idx += 2
-            else:
-                f.write(line)
-            idx += 1
-    print(f"--- The filtered report has been saved locally inside: {filtered_report_path}")
-
-
-def _get_user_from_html_line(line: str, problem_alias: str) -> str:
-    search_index = line.index(problem_alias) + len(problem_alias) + 1
-    # Now find the user
-    user_index = line.index("/", search_index)
-    return line[search_index:user_index]
-
-
 def _count_comments(source: List[str], language: str) -> Tuple[int, Set[str]]:
     comment_starts = ["#"] if language.startswith("py") else ["//", "/*"]
     count = 0
@@ -239,12 +158,13 @@ def _check_suspicious_activity(
         source_by_run_id: Dict[str, str],
         problem_alias: str,
         name_by_username: Dict[str, str],
-) -> Set[str]:
-    suspicious_names = set()
+) -> List[SuspiciousActivity]:
+    print(f"Checking suspicious activity for problem {problem_alias}")
+    suspicious_activity = []
     for username, runs in runs_by_username.items():
         languages = set()
         previous_run = None
-        warnings = []
+        warnings = set()
         suspicious_lines = set()
         for run in runs:
             source = source_by_run_id[run.guid]
@@ -254,54 +174,72 @@ def _check_suspicious_activity(
             if previous_run:
                 previous_extension = omegaup_lang_extension[previous_run.language]
                 if extension != previous_extension:
-                    time_diff = max(run.time, previous_run.time) - min(run.time, previous_run.time)
+                    time_diff = run.time - previous_run.time
                     if time_diff < timedelta(minutes=15):
-                        warnings.append(f"Used different languages within {math.ceil(time_diff.total_seconds() / 60)} minutes")
+                        warnings.add(f"Used different languages within {math.ceil(time_diff.total_seconds() / 60)} minutes")
 
             comment_count, comment_lines = _count_comments(source_lines, run.language)
             suspicious_lines.update(comment_lines)
             if comment_count > 3:
-                warnings.append(f"Code has {comment_count} comments")
+                warnings.add(f"Code has {comment_count} comments")
 
             accent_count, accent_lines = _count_accents(source_lines)
             suspicious_lines.update(accent_lines)
             if accent_count > 0:
-                warnings.append(f"Code has {accent_count} accents")
+                warnings.add(f"Code has {accent_count} accents")
 
             exception_count, exception_lines = _count_exceptions(source_lines)
             suspicious_lines.update(exception_lines)
             if exception_count > 1:
-                warnings.append(f"Code has {exception_count} exceptions")
+                warnings.add(f"Code has {exception_count} exceptions")
 
             previous_run = run
 
         if len(languages) > 1:
-            warnings.append(f"Used more than language: {languages}")
+            warnings.add(f"Used more than language: {languages}")
 
         suspicious_lines = {line.strip() for line in suspicious_lines}
         if warnings:
-            if username in name_by_username:
-                name = name_by_username[username]
-                suspicious_names.add(name)
-                name = f"{name} ({username})"
-            else:
-                suspicious_names.add(username)
-                name = username
-            print(with_color(f"Suspicious code from {name} for problem {problem_alias}:", BColor.WARNING))
-            for warning in warnings:
-                print(f"  - {warning}")
-            print("  - Suspicious code:")
-            for suspicious_line in sorted(suspicious_lines):
-                print(f"    - {suspicious_line}")
-            print()
+            name = name_by_username.get(username)
+            warnings_desc = [f"  - {w}" for w in sorted(warnings)]
+            suspicious_activity.append(SuspiciousActivity(
+                username=username,
+                name=name,
+                problem_alias=problem_alias,
+                reason="Code might be AI-generated:" + "\n".join(warnings_desc),
+                details="\n".join(sorted(suspicious_lines)),
+            ))
 
-    return suspicious_names
+    return suspicious_activity
+
+
+def _generate_activity_report(suspicious_activities: List[SuspiciousActivity], file_path: str) -> None:
+    print(with_color(f"\nGenerating suspicious activity report at {file_path}", BColor.OK_CYAN))
+    activities = sorted(suspicious_activities, key=lambda a: (
+        get_school_name(a.display_name), a.display_name, a.problem_alias, a.reason
+    ))
+    with open(file_path, "w") as csvfile:
+        writer = csv.DictWriter(
+            csvfile,
+            quoting=csv.QUOTE_ALL,
+            fieldnames=["School", "Name", "User", "Problem", "Reason", "Details"],
+        )
+        writer.writeheader()
+        for activity in activities:
+            writer.writerow({
+                "School": get_school_name(activity.display_name),
+                "Name": activity.display_name,
+                "User": activity.username,
+                "Problem": activity.problem_alias,
+                "Reason": activity.reason,
+                "Details": activity.details,
+            })
 
 
 def _main(
         contest_alias: Optional[str],
         problem_alias: Optional[str],
-        check_plagiarism: bool,
+        should_check_plagiarism: bool,
         min_plagiarism_perc: int,
 ) -> None:
     username, password, moss_user_id = get_credentials_from_file("login.txt")
@@ -326,24 +264,56 @@ def _main(
 
     print(f"Getting the code of all runs for {len(problem_aliases)} problems for contest {contest_alias}")
     suspicious_counts = {}
+    suspicious_activities: List[SuspiciousActivity] = []
     for problem_alias in problem_aliases:
         print(with_color(f"\nGetting the runs for problem {problem_alias}", BColor.BOLD))
         # TODO: Get runs directly for problem to be able to compare against previous solutions (make it a flag?)
-        runs = contest_class.runs(contest_alias=contest_alias, problem_alias=problem_alias).runs
+        runs = sorted(
+            contest_class.runs(contest_alias=contest_alias, problem_alias=problem_alias).runs,
+            # Ensure runs are ordered by submission time
+            key=lambda r: r.time,
+        )
         runs_by_username = {}
         for run in runs:
             runs_by_username.setdefault(run.username, []).append(run)
 
         source_by_run_id = _download_runs_for_problem(run_class, runs_by_username, problem_alias)
-        suspicious_names = _check_suspicious_activity(runs_by_username, source_by_run_id, problem_alias, name_by_username)
-        for name in suspicious_names:
-            suspicious_counts.setdefault(name, 0)
-            suspicious_counts[name] += 1
+        suspicious_activities.extend(
+            _check_suspicious_activity(runs_by_username, source_by_run_id, problem_alias, name_by_username)
+        )
+
+    print()
+    if should_check_plagiarism:
+        plagiarisms = check_plagiarism(
+            moss_user_id,
+            problem_aliases,
+            min_plagiarism_perc,
+            name_by_username,
+        )
+        for plag in plagiarisms:
+            for user_idx in range(2):
+                suspicious_activities.append(SuspiciousActivity(
+                    username=plag.usernames[user_idx],
+                    name=plag.display_names[user_idx],
+                    problem_alias=plag.problem_alias,
+                    reason=f"Code is {plag.similarity_perc}% similar",
+                    details=plag.results_url,
+                ))
+    else:
+        plagiarisms = []
+        print("The plagiarism check has been skipped")
+
+    _generate_activity_report(suspicious_activities, "suspicious_activity.csv")
+
+    for activity in suspicious_activities:
+        name = activity.name or activity.username
+        suspicious_counts.setdefault(name, 0)
+        suspicious_counts[name] += 1
 
     suspicious_school_counts = {}
     for name in suspicious_counts.keys():
-        if "-" in name:
-            school = name.split("-")[-1]
+        school = get_school_name(name)
+        if school:
             suspicious_school_counts.setdefault(school, 0)
             suspicious_school_counts[school] += 1
 
@@ -356,11 +326,8 @@ def _main(
         for school, count in suspicious_schools:
             print(f"  - {school}: {count} suspicious teams")
 
-    print()
-    if check_plagiarism:
-        _check_plagiarism(moss_user_id, problem_aliases, name_by_username, min_plagiarism_perc)
-    else:
-        print("The plagiarism check has been skipped")
+    if should_check_plagiarism:
+        generate_website(plagiarisms)
 
 
 if __name__ == "__main__":
@@ -374,6 +341,6 @@ if __name__ == "__main__":
     _main(
         contest_alias=args.contest,
         problem_alias=args.problem,
-        check_plagiarism=not args.skip_plagiarism,
+        should_check_plagiarism=not args.skip_plagiarism,
         min_plagiarism_perc=args.min_plagiarism_perc,
     )

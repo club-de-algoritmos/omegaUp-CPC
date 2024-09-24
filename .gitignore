@@ -1,13 +1,14 @@
 # python
 __pycache__
 
-#IDE
+# IDE
 .idea
 
 # personal info
 login.txt
 
-# generated directories
+# generated files
 generated
 submission
 results.html
+*.csv
