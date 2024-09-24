@@ -222,6 +222,7 @@ def _generate_activity_report(suspicious_activities: List[SuspiciousActivity], f
         writer = csv.DictWriter(
             csvfile,
             quoting=csv.QUOTE_ALL,
+            escapechar="\\",
             fieldnames=["School", "Name", "User", "Problem", "Reason", "Details"],
         )
         writer.writeheader()
