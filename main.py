@@ -292,11 +292,12 @@ def _main(
         )
         for plag in plagiarisms:
             for user_idx in range(2):
+                other_user_idx = 1 - user_idx
                 suspicious_activities.append(SuspiciousActivity(
                     username=plag.usernames[user_idx],
                     name=plag.display_names[user_idx],
                     problem_alias=plag.problem_alias,
-                    reason=f"Code is {plag.similarity_perc}% similar",
+                    reason=f"Code is {plag.similarity_perc}% similar to the code from {plag.display_names[other_user_idx]}",
                     details=plag.results_url,
                 ))
     else:
