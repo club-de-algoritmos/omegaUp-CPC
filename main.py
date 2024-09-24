@@ -254,7 +254,7 @@ def _check_suspicious_activity(
             if previous_run:
                 previous_extension = omegaup_lang_extension[previous_run.language]
                 if extension != previous_extension:
-                    time_diff = run.time - previous_run.time
+                    time_diff = max(run.time, previous_run.time) - min(run.time, previous_run.time)
                     if time_diff < timedelta(minutes=15):
                         warnings.append(f"Used different languages within {math.ceil(time_diff.total_seconds() / 60)} minutes")
 
@@ -356,6 +356,7 @@ def _main(
         for school, count in suspicious_schools:
             print(f"  - {school}: {count} suspicious teams")
 
+    print()
     if check_plagiarism:
         _check_plagiarism(moss_user_id, problem_aliases, name_by_username, min_plagiarism_perc)
     else:
