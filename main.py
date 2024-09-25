@@ -1,6 +1,6 @@
 import argparse
 import csv
-from datetime import timedelta
+from datetime import timedelta, datetime
 from typing import Optional, List, Dict, Tuple, Set
 
 import omegaup.api
@@ -243,6 +243,7 @@ def _main(
         should_check_plagiarism: bool,
         min_plagiarism_perc: int,
 ) -> None:
+    start_time = datetime.now()
     username, password, moss_user_id = get_credentials_from_file("login.txt")
 
     client_class = omegaup.api.Client(username=username, password=password)
@@ -328,6 +329,8 @@ def _main(
         for school, count in suspicious_schools:
             print(f"  - {school}: {count} suspicious teams")
 
+    duration = datetime.now() - start_time
+    print(with_color(f"\nAll computation was done in {math.ceil(duration.total_seconds() / 60)} min", BColor.OK_GREEN))
     if should_check_plagiarism:
         generate_website(plagiarisms)
 
