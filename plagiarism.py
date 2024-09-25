@@ -64,7 +64,7 @@ def check_plagiarism(
             if plag.similarity_perc >= min_plagiarism_perc:
                 plagiarisms.append(plag)
 
-    return sorted(plagiarisms, key=lambda p: p.similarity_perc)
+    return sorted(plagiarisms, key=lambda p: -p.similarity_perc)
 
 
 def _remove_same_user_matches(report_path: str, filtered_report_path: str, problem_alias: str) -> None:
