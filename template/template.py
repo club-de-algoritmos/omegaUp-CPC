@@ -13,7 +13,7 @@ def generate_website(plagiarisms: List[Plagiarism]) -> None:
         results_by_lang.setdefault(plag.language, []).append({
             "link": plag.results_url,
             "problem_alias": plag.problem_alias,
-            "usernames": plag.usernames,
+            "usernames": [_get_display_name(plag.usernames[i], plag.usernames[i]) for i in range(2)],
             "file_name": plag.file_names,
             "status": plag.status,
         })
@@ -22,6 +22,12 @@ def generate_website(plagiarisms: List[Plagiarism]) -> None:
     for lang in sorted(results_by_lang.keys()):
         template_data.append({"lang": lang, "data": results_by_lang[lang]})
     _compile_website(template_data)
+
+
+def _get_display_name(name: str, username: str) -> str:
+    if name == username:
+        return name
+    return f"{name} ({username})"
 
 
 def _compile_website(results: List[Dict[str, Any]]) -> None:

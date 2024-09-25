@@ -25,7 +25,7 @@ class MossHtml:
 @dataclass(frozen=True)
 class Plagiarism:
     usernames: Tuple[str, str]
-    display_names: Tuple[str, str]
+    names: Tuple[str, str]
     results_url: str
     problem_alias: str
     language: str

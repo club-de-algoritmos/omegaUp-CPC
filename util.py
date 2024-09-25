@@ -24,13 +24,6 @@ def get_credentials_from_file(file_name: str) -> Tuple[str, str, str]:
     return username, password, moss_user_id
 
 
-def get_display_name(username: str, name_by_username: Dict[str, str]) -> str:
-    name = name_by_username.get(username)
-    if name:
-        return f"{name} ({username})"
-    return username
-
-
 def get_school_name(display_name: str) -> Optional[str]:
     if "-" not in display_name:
         return None

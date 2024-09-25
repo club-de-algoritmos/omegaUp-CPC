@@ -6,7 +6,6 @@ from bs4 import BeautifulSoup
 
 from terminal import with_color, BColor
 from cpc_types import MossHtml, Plagiarism
-from util import get_display_name
 
 LANG_EXTENSION_TO_MOSS = {
     ".c": "c",
@@ -120,18 +119,18 @@ def _get_information_from_html(moss_html: MossHtml, name_by_username: Dict[str, 
                 problem_alias, username_1, file_name_1, status = _get_results_information(
                     first_tag_information
                 )
-                display_name_1 = get_display_name(username_1, name_by_username)
+                display_name_1 = name_by_username.get(username_1, username_1)
 
                 # Process second tag
                 second_tag_information = tag_pair.contents[0]
                 _, username_2, file_name_2, _ = _get_results_information(
                     second_tag_information
                 )
-                display_name_2 = get_display_name(username_2, name_by_username)
+                display_name_2 = name_by_username.get(username_2, username_2)
 
                 results.append(Plagiarism(
                     usernames=(username_1, username_2),
-                    display_names=(display_name_1, display_name_2),
+                    names=(display_name_1, display_name_2),
                     results_url=url,
                     problem_alias=problem_alias,
                     language=moss_html.language,
