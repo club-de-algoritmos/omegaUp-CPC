@@ -4,9 +4,12 @@ from pybars import Compiler
 import os
 
 from cpc_types import Plagiarism
+from terminal import with_color, BColor
 
 
-def generate_html_report(plagiarisms: List[Plagiarism], report_file_name: str) -> None:
+def generate_html_report(plagiarisms: List[Plagiarism], file_path: str) -> None:
+    print(with_color(f"\nGenerating plagiarism report at {file_path}", BColor.OK_CYAN))
+
     results_by_lang = {}
     for plag in plagiarisms:
         results_by_lang.setdefault(plag.language, []).append({
@@ -25,7 +28,7 @@ def generate_html_report(plagiarisms: List[Plagiarism], report_file_name: str) -
     with open(os.path.join("template", "template.hbs"), "r") as t:
         template = html_compiler.compile("".join(t.readlines()))
         output = template({"results": template_data})
-        with open(report_file_name, "w") as o:
+        with open(file_path, "w") as o:
             o.write(output)
 
 
