@@ -43,10 +43,9 @@ def _choose_contest_interactively(contest_class: omegaup.api.Contest) -> str:
     print("\nPlease select a a contest:")
     print_table(columns)
     contest_idx = int(input("Enter the contest number: "))
-
-    if contest_idx < 0 or contest_idx >= len(contests.contests):
+    while contest_idx < 0 or contest_idx >= len(contests.contests):
         print("Invalid contest number")
-        sys.exit(1)
+        contest_idx = int(input("Enter the contest number: "))
 
     return contests.contests[contest_idx].alias
 
@@ -62,10 +61,9 @@ def _choose_problems_interactively(problems: omegaup.api.ContestProblemsResponse
     print_table(columns)
 
     problem_idx = int(input("Enter the problem number: "))
-
-    if problem_idx < 0 or problem_idx >= len(problems.problems) + 1:
+    while problem_idx < 0 or problem_idx >= len(problems.problems) + 1:
         print("Invalid problem number")
-        sys.exit(1)
+        problem_idx = int(input("Enter the problem number: "))
 
     if problem_idx == 0:
         # return an array of problem aliases
@@ -83,7 +81,7 @@ def _download_runs_for_problem(
     for username, user_runs in runs_by_username.items():
         path = os.path.join("generated", problem_alias, username)
         os.makedirs(path, exist_ok=True)
-        for idx, run in enumerate(user_runs):
+        for run in user_runs:
             language = run.language
             extension = None
             for lang, ext in omegaup_lang_extension.items():
@@ -95,7 +93,7 @@ def _download_runs_for_problem(
 
             score = math.floor(run.score * 100)
             file_name = (
-                f"{idx:02}_{username}_{problem_alias}_{run.verdict}_{score}{extension}"
+                f"{run.guid}_{username}_{problem_alias}_{run.verdict}_{score}{extension}"
             )
             file_path = os.path.join(path, file_name)
             if os.path.exists(file_path):
@@ -270,11 +268,9 @@ def _main(
     for problem_alias in problem_aliases:
         print(with_color(f"\nGetting the runs for problem {problem_alias}", BColor.BOLD))
         # TODO: Get runs directly for problem to be able to compare against previous solutions (make it a flag?)
-        runs = sorted(
-            contest_class.runs(contest_alias=contest_alias, problem_alias=problem_alias).runs,
-            # Ensure runs are ordered by submission time
-            key=lambda r: r.time,
-        )
+        runs = contest_class.runs(contest_alias=contest_alias, problem_alias=problem_alias).runs
+        # Order by submission time
+        runs = sorted(runs, key=lambda r: r.time)
         runs_by_username = {}
         for run in runs:
             runs_by_username.setdefault(run.username, []).append(run)
