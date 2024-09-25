@@ -1,21 +1,20 @@
 import argparse
 import csv
-from datetime import timedelta, datetime
+from datetime import timedelta
 from typing import Optional, List, Dict, Tuple, Set
 
 import omegaup.api
-import sys
 import os
 import math
 
 from plagiarism import check_plagiarism
-from template.template import generate_website
+from template.template import generate_html_report
 from terminal import with_color, BColor
 from cpc_types import SuspiciousActivity
 
 from util import get_credentials_from_file, print_table, get_school_name
 
-omegaup_lang_extension = {
+OMEGAUP_LANG_EXTENSION = {
     "c11-clang": ".c",
     "c11-gcc": ".c",
     "cpp11-clang": ".cpp",
@@ -84,7 +83,7 @@ def _download_runs_for_problem(
         for run in user_runs:
             language = run.language
             extension = None
-            for lang, ext in omegaup_lang_extension.items():
+            for lang, ext in OMEGAUP_LANG_EXTENSION.items():
                 if language.startswith(lang):
                     extension = ext
             if not extension:
@@ -167,10 +166,10 @@ def _check_suspicious_activity(
         for run in runs:
             source = source_by_run_id[run.guid]
             source_lines = source.split("\n")
-            extension = omegaup_lang_extension[run.language]
+            extension = OMEGAUP_LANG_EXTENSION[run.language]
             languages.add(extension)
             if previous_run:
-                previous_extension = omegaup_lang_extension[previous_run.language]
+                previous_extension = OMEGAUP_LANG_EXTENSION[previous_run.language]
                 if extension != previous_extension:
                     time_diff = run.time - previous_run.time
                     if time_diff < timedelta(minutes=15):
@@ -241,7 +240,6 @@ def _main(
         should_check_plagiarism: bool,
         min_plagiarism_perc: int,
 ) -> None:
-    start_time = datetime.now()
     username, password, moss_user_id = get_credentials_from_file("login.txt")
 
     client_class = omegaup.api.Client(username=username, password=password)
@@ -325,10 +323,8 @@ def _main(
         for school, count in suspicious_schools:
             print(f"  - {school}: {count} suspicious teams")
 
-    duration = datetime.now() - start_time
-    print(with_color(f"\nAll computation was done in {math.ceil(duration.total_seconds() / 60)} min", BColor.OK_GREEN))
     if should_check_plagiarism:
-        generate_website(plagiarisms)
+        generate_html_report(plagiarisms, "results.html")
 
 
 if __name__ == "__main__":
