@@ -1,5 +1,5 @@
 import os
-from typing import Dict, Tuple, List
+from typing import Dict, Tuple, List, Set
 
 import mosspy
 from bs4 import BeautifulSoup
@@ -61,7 +61,17 @@ def check_plagiarism(
 
     plagiarisms: List[Plagiarism] = []
     for moss_html in moss_htmls:
-        for plag in _get_information_from_html(moss_html, name_by_username):
+        lang_plagiarisms = sorted(
+            _get_information_from_html(moss_html, name_by_username),
+            key=lambda p: -p.similarity_perc,
+        )
+        seen_pairs: Set[Tuple[str, str]] = set()
+        for plag in lang_plagiarisms:
+            if plag.usernames in seen_pairs:
+                # Only keep the first plagiarism finding for each pair, as it's the most similar
+                continue
+            seen_pairs.add(plag.usernames)
+
             if not check_diff_schools:
                 school_1 = get_school_name(plag.names[0])
                 school_2 = get_school_name(plag.names[1])
