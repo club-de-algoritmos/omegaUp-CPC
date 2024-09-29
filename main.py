@@ -324,7 +324,7 @@ def _main(
             print(f"  - {school}: {count} suspicious teams")
 
     if should_check_plagiarism:
-        generate_html_report(plagiarisms, "results.html")
+        generate_html_report(plagiarisms, "plagiarism_report.html")
 
 
 if __name__ == "__main__":
