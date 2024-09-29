@@ -193,15 +193,14 @@ def _check_suspicious_activity(
             previous_run = run
 
         if len(languages) > 1:
-            warnings.add(f"Used more than language: {languages}")
+            warnings.add(f"Used more than one language: {languages}")
 
         suspicious_lines = {line.strip() for line in suspicious_lines}
         if warnings:
-            name = name_by_username.get(username)
             warnings_desc = [f"  - {w}" for w in sorted(warnings)]
             suspicious_activity.append(SuspiciousActivity(
                 username=username,
-                name=name,
+                name=name_by_username.get(username),
                 problem_alias=problem_alias,
                 similarity_perc=None,
                 reason="Code might be AI-generated:\n" + "\n".join(warnings_desc),
@@ -219,7 +218,7 @@ def _generate_activity_report(
 ) -> None:
     print(with_color(f"\nGenerating suspicious activity report at {file_path}", BColor.OK_CYAN))
     activities = sorted(suspicious_activities, key=lambda a: (
-        get_school_name(a.display_name), a.display_name, a.problem_alias, a.reason
+        get_school_name(a.display_name) or "", a.display_name, a.problem_alias, a.reason
     ))
     with open(file_path, "w") as csvfile:
         writer = csv.DictWriter(
@@ -308,7 +307,7 @@ def _main(
                 other_user_idx = 1 - user_idx
                 suspicious_activities.append(SuspiciousActivity(
                     username=plag.usernames[user_idx],
-                    name=plag.display_names[user_idx],
+                    name=plag.names[user_idx],
                     problem_alias=plag.problem_alias,
                     similarity_perc=plag.similarity_perc,
                     reason=f"Code is {plag.similarity_perc}% similar to the code from {plag.display_names[other_user_idx]}",
