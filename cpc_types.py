@@ -25,10 +25,14 @@ class MossHtml:
 @dataclass(frozen=True)
 class Plagiarism:
     usernames: Tuple[str, str]
-    names: Tuple[str, str]
+    names: Tuple[Optional[str], Optional[str]]
     results_url: str
     problem_alias: str
     language: str
     file_names: Tuple[str, str]
     status: str
     similarity_perc: int
+
+    @property
+    def display_names(self) -> Tuple[str, str]:
+        return self.names[0] or self.usernames[0], self.names[1] or self.usernames[1]

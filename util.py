@@ -24,8 +24,8 @@ def get_credentials_from_file(file_name: str) -> Tuple[str, str, str]:
     return username, password, moss_user_id
 
 
-def get_school_name(display_name: str) -> Optional[str]:
-    if "-" not in display_name:
+def get_school_name(display_name: Optional[str]) -> Optional[str]:
+    if not display_name or "-" not in display_name:
         return None
     return display_name.split("-")[-1]
 

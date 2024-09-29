@@ -239,6 +239,7 @@ def _main(
         problem_alias: Optional[str],
         should_check_plagiarism: bool,
         min_plagiarism_perc: int,
+        check_diff_schools: bool,
 ) -> None:
     username, password, moss_user_id = get_credentials_from_file("login.txt")
 
@@ -285,15 +286,16 @@ def _main(
             problem_aliases,
             min_plagiarism_perc,
             name_by_username,
+            check_diff_schools,
         )
         for plag in plagiarisms:
             for user_idx in range(2):
                 other_user_idx = 1 - user_idx
                 suspicious_activities.append(SuspiciousActivity(
                     username=plag.usernames[user_idx],
-                    name=plag.names[user_idx],
+                    name=plag.display_names[user_idx],
                     problem_alias=plag.problem_alias,
-                    reason=f"Code is {plag.similarity_perc}% similar to the code from {plag.names[other_user_idx]}",
+                    reason=f"Code is {plag.similarity_perc}% similar to the code from {plag.display_names[other_user_idx]}",
                     details=plag.results_url,
                 ))
     else:
@@ -332,7 +334,16 @@ if __name__ == "__main__":
     parser.add_argument("-c", "--contest", help="Contest alias to check")
     parser.add_argument("-p", "--problem", help="Problem alias to check, use 'all' for all contest problems")
     parser.add_argument("--skip-plagiarism", action="store_true", help="Skip doing the plagiarism check with Moss")
-    parser.add_argument("--min-plagiarism-perc", default=60, help="Minimum percentage of similarity to detect plagiarism, defaults to 30%")
+    parser.add_argument(
+        "--min-plagiarism-perc",
+        default=60,
+        help="Minimum percentage of similarity to detect plagiarism, defaults to 30%",
+    )
+    parser.add_argument(
+        "--check-diff-schools",
+        action="store_true",
+        help="Display plagiarism findings between different schools, only relevant when there are schools",
+    )
     args = parser.parse_args()
 
     _main(
@@ -340,4 +351,5 @@ if __name__ == "__main__":
         problem_alias=args.problem,
         should_check_plagiarism=not args.skip_plagiarism,
         min_plagiarism_perc=args.min_plagiarism_perc,
+        check_diff_schools=args.check_diff_schools,
     )
