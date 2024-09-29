@@ -332,7 +332,7 @@ if __name__ == "__main__":
     parser.add_argument("-c", "--contest", help="Contest alias to check")
     parser.add_argument("-p", "--problem", help="Problem alias to check, use 'all' for all contest problems")
     parser.add_argument("--skip-plagiarism", action="store_true", help="Skip doing the plagiarism check with Moss")
-    parser.add_argument("--min-plagiarism-perc", default=30, help="Minimum percentage of similarity to detect plagiarism, defaults to 30%")
+    parser.add_argument("--min-plagiarism-perc", default=60, help="Minimum percentage of similarity to detect plagiarism, defaults to 30%")
     args = parser.parse_args()
 
     _main(
