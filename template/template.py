@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 
 from pybars import Compiler
 import os
@@ -15,7 +15,7 @@ def generate_html_report(plagiarisms: List[Plagiarism], file_path: str) -> None:
         results_by_lang.setdefault(plag.language, []).append({
             "link": plag.results_url,
             "problem_alias": plag.problem_alias,
-            "usernames": [_get_display_name(plag.usernames[i], plag.usernames[i]) for i in range(2)],
+            "usernames": [_get_display_name(plag.names[i], plag.usernames[i]) for i in range(2)],
             "file_name": plag.file_names,
             "status": plag.status,
         })
@@ -32,7 +32,5 @@ def generate_html_report(plagiarisms: List[Plagiarism], file_path: str) -> None:
             o.write(output)
 
 
-def _get_display_name(name: str, username: str) -> str:
-    if name == username:
-        return name
-    return f"{name} ({username})"
+def _get_display_name(name: Optional[str], username: str) -> str:
+    return f"{name} ({username})" if name else username
