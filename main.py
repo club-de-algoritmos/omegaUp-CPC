@@ -203,14 +203,20 @@ def _check_suspicious_activity(
                 username=username,
                 name=name,
                 problem_alias=problem_alias,
-                reason="Code might be AI-generated:" + "\n".join(warnings_desc),
+                similarity_perc=None,
+                reason="Code might be AI-generated:\n" + "\n".join(warnings_desc),
                 details="\n".join(sorted(suspicious_lines)),
             ))
 
     return suspicious_activity
 
 
-def _generate_activity_report(suspicious_activities: List[SuspiciousActivity], file_path: str) -> None:
+def _generate_activity_report(
+        suspicious_activities: List[SuspiciousActivity],
+        total_points_by_username: Dict[str, float],
+        problem_points_by_username: Dict[str, Dict[str, float]],
+        file_path: str,
+) -> None:
     print(with_color(f"\nGenerating suspicious activity report at {file_path}", BColor.OK_CYAN))
     activities = sorted(suspicious_activities, key=lambda a: (
         get_school_name(a.display_name), a.display_name, a.problem_alias, a.reason
@@ -220,7 +226,9 @@ def _generate_activity_report(suspicious_activities: List[SuspiciousActivity], f
             csvfile,
             quoting=csv.QUOTE_ALL,
             escapechar="\\",
-            fieldnames=["School", "Name", "User", "Problem", "Reason", "Details"],
+            fieldnames=[
+                "School", "Name", "User", "Problem", "Problem score", "Total score", "Similarity", "Reason", "Details",
+            ],
         )
         writer.writeheader()
         for activity in activities:
@@ -229,6 +237,9 @@ def _generate_activity_report(suspicious_activities: List[SuspiciousActivity], f
                 "Name": activity.display_name,
                 "User": activity.username,
                 "Problem": activity.problem_alias,
+                "Problem score": problem_points_by_username.get(activity.username, {}).get(activity.problem_alias, ""),
+                "Total score": total_points_by_username.get(activity.username, ""),
+                "Similarity": activity.similarity_perc or "",
                 "Reason": activity.reason,
                 "Details": activity.details,
             })
@@ -256,10 +267,14 @@ def _main(
     else:
         problem_aliases = _choose_problems_interactively(problems)
 
-    name_by_username = {
-        contestant.username: contestant.name
-        for contestant in contest_class.scoreboard(contest_alias=contest_alias).ranking
-    }
+    name_by_username: Dict[str, Optional[str]] = {}
+    total_points_by_username: Dict[str, float] = {}
+    problem_points_by_username: Dict[str, Dict[str, float]] = {}
+    for rank in contest_class.scoreboard(contest_alias=contest_alias).ranking:
+        name_by_username[rank.username] = rank.name
+        total_points_by_username[rank.username] = rank.total.points
+        for problem_points in rank.problems:
+            problem_points_by_username.setdefault(rank.username, {})[problem_points.alias] = problem_points.points
 
     print(f"Getting the code of all runs for {len(problem_aliases)} problems for contest {contest_alias}")
     suspicious_counts = {}
@@ -295,6 +310,7 @@ def _main(
                     username=plag.usernames[user_idx],
                     name=plag.display_names[user_idx],
                     problem_alias=plag.problem_alias,
+                    similarity_perc=plag.similarity_perc,
                     reason=f"Code is {plag.similarity_perc}% similar to the code from {plag.display_names[other_user_idx]}",
                     details=plag.results_url,
                 ))
@@ -302,7 +318,12 @@ def _main(
         plagiarisms = []
         print("The plagiarism check has been skipped")
 
-    _generate_activity_report(suspicious_activities, "suspicious_activity.csv")
+    _generate_activity_report(
+        suspicious_activities,
+        total_points_by_username,
+        problem_points_by_username,
+        "suspicious_activity.csv",
+    )
 
     for activity in suspicious_activities:
         name = activity.name or activity.username

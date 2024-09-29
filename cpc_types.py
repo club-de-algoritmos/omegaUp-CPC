@@ -7,6 +7,7 @@ class SuspiciousActivity:
     username: str
     name: Optional[str]
     problem_alias: str
+    similarity_perc: Optional[int]
     reason: str
     details: str
 
