@@ -101,10 +101,18 @@ def _download_runs_for_problem(
                     source_by_run_id[run.guid] = "\n".join(f.readlines())
                 continue
 
-            source = _get_source_from_run(run_class, run.guid)
+            try:
+                source = _get_source_from_run(run_class, run.guid)
+            except Exception:
+                if run.verdict != "JE":
+                    raise
+                print(f"Run {run.guid} has a Judge Error verdict and no source code is available")
+                source = ""
+
             source_by_run_id[run.guid] = source
-            with open(file_path, "w") as f:
-                f.write(source)
+            if source:
+                with open(file_path, "w") as f:
+                    f.write(source)
 
     print("Source code saved!")
     return source_by_run_id
@@ -165,6 +173,9 @@ def _check_suspicious_activity(
         suspicious_lines = set()
         for run in runs:
             source = source_by_run_id[run.guid]
+            if not source:
+                continue
+
             source_lines = source.split("\n")
             extension = OMEGAUP_LANG_EXTENSION[run.language]
             languages.add(extension)
@@ -357,7 +368,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--min-plagiarism-perc",
         default=60,
-        help="Minimum percentage of similarity to detect plagiarism, defaults to 30%",
+        help="Minimum percentage of similarity to detect plagiarism, defaults to 30 percent",
     )
     parser.add_argument(
         "--check-diff-schools",
