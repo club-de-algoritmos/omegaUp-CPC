@@ -291,8 +291,10 @@ def _main(
     suspicious_activities: List[SuspiciousActivity] = []
     for problem_alias in problem_aliases:
         print(with_color(f"\nGetting the runs for problem {problem_alias}", BColor.BOLD))
-        # TODO: Get runs directly for problem to be able to compare against previous solutions (make it a flag?)
-        runs = contest_class.runs(contest_alias=contest_alias, problem_alias=problem_alias).runs
+        response = contest_class.runs(contest_alias=contest_alias, problem_alias=problem_alias, rowcount=10000)
+        runs = response.runs
+        if response.totalRuns != len(runs):
+            print(with_color(f"Did not get all runs! Got {len(runs)} but expected {response.totalRuns}", BColor.WARNING))
         # Order by submission time
         runs = sorted(runs, key=lambda r: r.time)
         runs_by_username = {}
