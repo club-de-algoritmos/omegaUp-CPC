@@ -1,5 +1,6 @@
 import argparse
 import csv
+import time
 from datetime import timedelta
 from typing import Optional, List, Dict, Tuple, Set
 
@@ -308,13 +309,26 @@ def _main(
 
     print()
     if should_check_plagiarism:
-        plagiarisms = check_plagiarism(
-            moss_user_id,
-            problem_aliases,
-            min_plagiarism_perc,
-            name_by_username,
-            check_diff_schools,
-        )
+        tries = 3
+        while True:
+            try:
+                plagiarisms = check_plagiarism(
+                    moss_user_id,
+                    problem_aliases,
+                    min_plagiarism_perc,
+                    name_by_username,
+                    check_diff_schools,
+                )
+                break
+            except ConnectionResetError:
+                tries -= 1
+                if tries <= 0:
+                    print(with_color("Error talking to MOSS after 3 tries", BColor.FAIL))
+                    raise
+                wait_secs = 60
+                print(with_color(f"MOSS failed, retrying in {wait_secs} seconds...", BColor.WARNING))
+                time.sleep(wait_secs)
+
         for plag in plagiarisms:
             for user_idx in range(2):
                 other_user_idx = 1 - user_idx
