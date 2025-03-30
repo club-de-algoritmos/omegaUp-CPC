@@ -383,8 +383,9 @@ if __name__ == "__main__":
     parser.add_argument("--skip-plagiarism", action="store_true", help="Skip doing the plagiarism check with Moss")
     parser.add_argument(
         "--min-plagiarism-perc",
-        default=60,
-        help="Minimum percentage of similarity to detect plagiarism, defaults to 30 percent",
+        default=80,
+        type=int,
+        help="Minimum percentage of similarity to detect plagiarism, defaults to 80",
     )
     parser.add_argument(
         "--check-diff-schools",
