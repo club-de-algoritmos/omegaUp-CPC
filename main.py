@@ -32,6 +32,10 @@ OMEGAUP_LANG_EXTENSION = {
     "py3": ".py",
 }
 
+def _get_normalized_extension(lang: str) -> str:
+    extension = OMEGAUP_LANG_EXTENSION[lang]
+    return ".cpp" if extension == ".c" else extension
+
 
 def _choose_contest_interactively(contest_class: omegaup.api.Contest) -> str:
     contests = contest_class.adminList()
@@ -178,10 +182,10 @@ def _check_suspicious_activity(
                 continue
 
             source_lines = source.split("\n")
-            extension = OMEGAUP_LANG_EXTENSION[run.language]
+            extension = _get_normalized_extension(run.language)
             languages.add(extension)
             if previous_run:
-                previous_extension = OMEGAUP_LANG_EXTENSION[previous_run.language]
+                previous_extension = _get_normalized_extension(previous_run.language)
                 if extension != previous_extension:
                     time_diff = run.time - previous_run.time
                     if time_diff < timedelta(minutes=15):
