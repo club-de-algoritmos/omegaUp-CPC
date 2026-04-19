@@ -36,10 +36,15 @@ def check_plagiarism(
             if len(m.files) == 0:
                 continue
 
-            url = m.send(lambda file_path, display_name: print("*", end="", flush=True))
-
             print()
-            print(with_color(f"OK: {moss_lang}", BColor.OK_GREEN))
+            print(with_color(f"Analyzing {len(m.files)} solutions in {moss_lang} ({ext}) for problem {problem_alias}", BColor.OK_GREEN))
+
+            url = m.send(lambda file_path, display_name: print("*", end="", flush=True))
+            print()
+            if url.startswith("Error:"):
+                print(f"Got an error from Moss: {with_color(url, BColor.FAIL)}")
+                raise RuntimeError(f"Got an error from Moss: {url}")
+
             print(f"Unfiltered Online Report (May contain duplicates): {with_color(url, BColor.OK_CYAN)}")
 
             # Save report file
